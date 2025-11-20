@@ -1,0 +1,37 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+ name: Maven_Web_App_project_HarshadaDeployment
+spec:
+ replicas: 2
+ strategy: 
+    type: Recreate
+ selector: 
+   matchLabels: 
+     app: mavenwebapp
+ template:
+  metadata:
+   name: mavenwebapppod
+   labels:
+     app: Maven_Web_App_project_Harshada
+  spec: 
+    containers:
+    - name: mavenwebappcontainer
+      image: Harshada/maven-web-appMaven_Web_App_project_Harshada:v3
+      imagePullPolicy: Always
+      ports:
+      - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+ name: mavenwebappsvc
+spec:
+  type: LoadBalancer
+  selector:
+   app: Maven_Web_App_project_Harshada
+  ports:
+   - port: 80
+     targetPort: 8080
+...
