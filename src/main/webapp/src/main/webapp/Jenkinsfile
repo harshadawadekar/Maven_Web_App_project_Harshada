@@ -1,29 +1,93 @@
 pipeline {
-    agent any
-    
-    tools{
-        maven 'Maven-3.9.9'
+  agent any
+
+  tools {
+    // Name must match Jenkins Global Tool Configuration -> Maven installation name
+    maven 'Maven-3.9.9'
+  }
+
+  environment {
+    AWS_REGION = 'ap-south-1'
+    AWS_ACCOUNT = '038462790429'               // e.g. 123456789012
+    ECR_REPO = "${AWS_ACCOUNT}.dkr.ecr.${ap-south-1a}.amazonaws.com/Maven_Web_App_project_Harshada"
+    IMAGE_TAG = "${env.BUILD_NUMBER}"
+    K8S_MANIFEST = 'k8s-deploy.yml'                // path in repo
+  }
+
+  stages {
+    stage('Checkout') {
+      steps {
+        // If your repo is public, credentialsId can be omitted.
+        // If private, create Jenkins credentials (username+PAT) and set the ID below.
+        git branch: 'main',
+            url: 'https://github.com/harshadawadekar/Maven_Web_App_project_Harshada.git'
+            // credentialsId: 'github-creds'
+      }
     }
-    stages {
-        stage('clone') {
-            steps {
-              git branch: 'main', url: 'https://github.com/harshadawadekar/Maven_Web_App_project_Harshada.git'
-            }
+
+    stage('Build (Maven)') {
+      steps {
+        sh 'mvn -B -DskipTests clean package'
+      }
+      post {
+        success {
+          archiveArtifacts artifacts: 'target/*.jar', onlyIfSuccessful: true
         }
-        stage('build'){
-            steps{
-                 sh 'mvn clean package'
-            }
-        }
-        stage('docker image'){
-            steps {
-                sh 'docker build -t Harshada/Maven_Web_App_project_Harshada.'
-            }
-        }
-        stage('k8s deploy'){
-            steps{
-               sh 'kubectl apply -f k8s-deploy.yml'
-            }
-        }
+      }
     }
+
+    stage('Docker Build & Push to ECR') {
+      steps {
+        // Use Jenkins AWS credentials (create credentialsId 'aws-creds' in Jenkins)
+        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
+          sh '''
+            # login to ECR (creates local docker auth)
+            aws ecr get-login-password --region $AWS_REGION \
+              | docker login --username AWS --password-stdin ${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com
+
+            # ensure ECR repo exists (no-op if already present)
+            aws ecr describe-repositories --repository-names myapp --region $AWS_REGION || \
+              aws ecr create-repository --repository-name myapp --region $AWS_REGION
+
+            # build, tag, push
+            docker build -t ${ECR_REPO}:${IMAGE_TAG} .
+            docker push ${ECR_REPO}:${IMAGE_TAG}
+          '''
+        }
+      }
+    }
+
+    stage('Deploy to EKS') {
+      steps {
+        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
+          sh '''
+            # update kubeconfig for EKS cluster (replace cluster name if different)
+            aws eks update-kubeconfig --region $AWS_REGION --name my-eks-cluster
+
+            # replace image in deployment (if deployment exists do set-image; else apply manifest)
+            if kubectl get deployment myapp >/dev/null 2>&1; then
+              kubectl set image deployment/myapp myapp=${ECR_REPO}:${IMAGE_TAG} --record
+            else
+              # If using manifest with image placeholder, you could sed in the tag before apply
+              # example simple replace: (requires your manifest to reference ':latest' or placeholder)
+              kubectl apply -f ${K8S_MANIFEST}
+            fi
+
+            # wait for rollout
+            kubectl rollout status deployment/myapp --timeout=120s || true
+            kubectl get pods -l app=myapp -o wide
+          '''
+        }
+      }
+    }
+  }
+
+  post {
+    success {
+      echo "Deployed ${ECR_REPO}:${IMAGE_TAG}"
+    }
+    failure {
+      echo "Build or deploy failed. Check console logs."
+    }
+  }
 }
