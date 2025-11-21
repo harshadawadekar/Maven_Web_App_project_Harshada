@@ -8,7 +8,7 @@ pipeline {
     stages {
         stage('Clone Repo') {
             steps {
-               git branch: 'main', url: 'https://github.com/harshadawadekar/Maven_Web_App_project_Harshada.git''
+               git branch: 'main', url: 'https://github.com/harshadawadekar/Maven_Web_App_project_Harshada.git'
             }
         }
         stage('Maven Build') {
