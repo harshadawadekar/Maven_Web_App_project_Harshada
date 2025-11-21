@@ -11,9 +11,9 @@
        src: target
        dest: /home/ansadmin
     - name : Build image
-      command: docker build -t ashokit/mavenwebapp .
+      command: docker build -t Harshada/Maven_Web_App_project_Harshada .
     - name : Push Docker Image
-      command: docker push ashokit/mavenwebapp
+      command: docker push Harshada/Maven_Web_App_project_Harshada
 - name: Second Play - K8s Deployment
   hosts: eks
   tasks:
