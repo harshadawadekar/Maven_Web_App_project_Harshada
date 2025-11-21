@@ -14,11 +14,11 @@ spec:
   metadata:
    name: mavenwebapppod
    labels:
-     app: mavenwebapp	 
+     app: Maven_Web_App_project_Harshada
   spec: 
     containers:
     - name: mavenwebappcontainer
-      image: ashokit/maven-web-app:v3
+      image: Harshada/maven-web-app:v3
       imagePullPolicy: Always
       ports:
       - containerPort: 8080
